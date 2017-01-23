@@ -1,5 +1,5 @@
 name:            wai-cli
-version:         0.0.0
+version:         0.1.0
 synopsis:        Command line runner for Wai apps (using Warp) with TLS, CGI, socket activation & graceful shutdown
 description:
     Command line runner for Wai apps (using Warp) with support for UNIX domain sockets,
@@ -19,6 +19,7 @@ extra-source-files:
     README.md
 tested-with:
     GHC == 8.0.1
+    GHC == 7.10.3
 
 source-repository head
     type: git

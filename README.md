@@ -1,4 +1,4 @@
-# wai-cli [![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](http://unlicense.org)
+# wai-cli [![Hackage](https://img.shields.io/hackage/v/wai-cli.svg?style=flat)](https://hackage.haskell.org/package/wai-cli) [![Build Status](https://img.shields.io/travis/myfreeweb/wai-cli.svg?style=flat)](https://travis-ci.org/myfreeweb/wai-cli) [![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](http://unlicense.org)
 
 A command line runner for Wai apps (using Warp) with support for:
 
@@ -11,7 +11,7 @@ A command line runner for Wai apps (using Warp) with support for:
 - `--devlogging` development logging (from `wai-extra`)
 - printing a pretty and colorful run message (e.g. `Running on http port 3000 with 4 CPUs`) (you can replace it with your own, or with nothing)
 
-Extracted from [sweetroll](https://github.com/myfreeweb/sweetroll) / [microformats2-parser](https://github.com/myfreeweb/microformats2-parser)'s demo web app.
+Extracted from [sweetroll](https://github.com/myfreeweb/sweetroll) / [wai-cli](https://github.com/myfreeweb/wai-cli)'s demo web app.
 
 ## Usage
 

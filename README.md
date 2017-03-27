@@ -11,7 +11,7 @@ A command line runner for Wai apps (using Warp) with support for:
 - `--devlogging` development logging (from `wai-extra`)
 - printing a pretty and colorful run message (e.g. `Running on http port 3000 with 4 CPUs`) (you can replace it with your own, or with nothing)
 
-Extracted from [sweetroll](https://github.com/myfreeweb/sweetroll) / [wai-cli](https://github.com/myfreeweb/wai-cli)'s demo web app.
+Extracted from [sweetroll](https://github.com/myfreeweb/sweetroll) and [microformats2-parser](https://github.com/myfreeweb/microformats2-parser)'s demo web app.
 
 ## Usage
 
@@ -32,7 +32,9 @@ main = defWaiMain =<< app
 ```
 
 Want to use command line args for your application-specific settings? Don't.
-Use environment variables instead. (Possibly with [dotenv](https://github.com/stackbuilders/dotenv-hs) to load some of them from a file.)
+Use environment variables instead.
+Possibly with [dotenv](https://github.com/stackbuilders/dotenv-hs) to load some of them from a file.
+[envy](https://www.stackage.org/package/envy) is a really awesome way to read them.
 
 ## License
 

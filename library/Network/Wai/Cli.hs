@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, OverloadedStrings, UnicodeSyntax #-}
 
-module Network.Wai.Cli (module Network.Wai.Cli) where
+module Network.Wai.Cli where
 
 import           Network.Wai (responseLBS, Application)
 import qualified Network.Wai.Handler.CGI as CGI
@@ -114,7 +114,7 @@ defPutListening opts = getNumCapabilities >>= putMain
                      "http" → reset " port "   >> boldMagenta (show $ port opts)
                      "unix" → reset " socket " >> boldMagenta (show $ socket opts)
                      "activate" → reset " activated socket"
-#ifdef SweetrollTLS
+#ifdef WaiCliTLS
                      "http+tls" → reset " (TLS) port "   >> boldMagenta (show $ port opts)
                      "unix+tls" → reset " (TLS) socket " >> boldMagenta (show $ socket opts)
                      "activate+tls" → reset " (TLS) activated socket"

@@ -109,7 +109,7 @@ waiMain putListening putWelcome app = runCommand $ \opts _ → do
 
 defPutListening ∷ WaiOptions → IO ()
 defPutListening opts = getNumCapabilities >>= putMain
-  where putMain cpus = reset "Running on " >> blue (protocol opts) >> putProto >> reset " with " >> green (show cpus ++ " CPUs") >> putStrLn ""
+  where putMain cpus = reset "Running on " >> blue (protocol opts) >> putProto >> reset " with " >> green (show cpus ++ " CPUs") >> setReset >> putStrLn ""
         putProto = case protocol opts of
                      "http" → reset " port "   >> boldMagenta (show $ port opts)
                      "unix" → reset " socket " >> boldMagenta (show $ socket opts)

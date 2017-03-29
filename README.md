@@ -13,6 +13,8 @@ A command line runner for Wai apps (using Warp) with support for:
 
 Extracted from [sweetroll](https://github.com/myfreeweb/sweetroll) and [microformats2-parser](https://github.com/myfreeweb/microformats2-parser)'s demo web app.
 
+Now used in the [magicbane](https://github.com/myfreeweb/magicbane) framework (which was also extracted from sweetroll).
+
 ## Usage
 
 Add a dependency on `wai-cli` and write something like this:

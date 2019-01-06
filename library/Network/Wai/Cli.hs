@@ -8,6 +8,9 @@ import           Network.Wai.Handler.Warp hiding (run)
 #ifdef WaiCliTLS
 import           Network.Wai.Handler.WarpTLS
 #endif
+#ifdef WaiCliFastCGI
+import qualified Network.Wai.Handler.FastCGI as FCGI
+#endif
 import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
 import           Network.HTTP.Types (serviceUnavailable503)
 import           Network.Socket.Activation
@@ -22,6 +25,7 @@ import           Control.Monad
 import           Control.Monad.Trans (liftIO)
 import           Control.Exception (bracket)
 import           Options
+import           Data.List (intercalate)
 
 data GracefulMode = ServeNormally | Serve503
 
@@ -40,15 +44,30 @@ instance Options WaiOptions where
   defineOptions = pure WaiOptions
     <*> simpleOption "port"              3000                "The port the app should listen for connections on (for http)"
     <*> simpleOption "socket"            "wai.sock"          "The UNIX domain socket path the app should listen for connections on (for unix)"
+    <*> simpleOption "protocol"          "http"              ("The protocol for the server. One of: " ++ availableProtocols)
 #ifdef WaiCliTLS
-    <*> simpleOption "protocol"          "http"              "The protocol for the server. One of: http, http+tls, unix, unix+tls, activate, activate+tls, cgi"
     <*> simpleOption "tlskey"            ""                  "Path to the TLS private key file for +tls protocols"
     <*> simpleOption "tlscert"           ""                  "Path to the TLS certificate bundle file for +tls protocols"
-#else
-    <*> simpleOption "protocol"          "http"              "The protocol for the server. One of: http, unix, activate, cgi"
 #endif
     <*> simpleOption "graceful"          "serve-normally"    "Graceful shutdown mode. One of: none, serve-normally, serve-503"
     <*> simpleOption "devlogging"        Nothing             "Whether development logging should be enabled"
+    where
+      availableProtocols = intercalate ", " $ concat
+        [coreProtocols, tlsProtocols, fcgiProtocol]
+      coreProtocols = ["http", "unix", "activate", "cgi"]
+      tlsProtocols =
+#ifdef WaiCliTLS
+        ["http+tls", "unix+tls", "activate+tls"]
+#else
+        []
+#endif
+      fcgiProtocol =
+#ifdef WaiCliFastCGI
+        ["fastcgi"]
+#else
+        []
+#endif
+
 
 runActivated ∷ (Settings → S.Socket → Application → IO ()) → Settings → Application → IO ()
 runActivated run warps app = do
@@ -87,9 +106,12 @@ waiMain putListening putWelcome app = runCommand $ \opts _ → do
 #endif
   let warps = setBeforeMainLoop (putListening opts) $ setPort (port opts) defaultSettings
   let app' = if devlogging opts == Just True then logStdoutDev app else app
-  if protocol opts == "cgi"
-     then CGI.run app'
-     else do
+  case protocol opts of
+     "cgi" → CGI.run app'
+#ifdef WaiCliFastCGI
+     "fastcgi" → FCGI.run app'
+#endif
+     _ → do
        let run = case protocol opts of
              "http" → runSettings
              "unix" → \warps' app'' → bracket (bindPath $ socket opts) S.close (\sock → runSettingsSocket warps' sock app'')

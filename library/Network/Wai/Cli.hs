@@ -26,11 +26,13 @@ import           Control.Monad.Trans (liftIO)
 import           Control.Exception (bracket)
 import           Options
 import           Data.List (intercalate)
+import           Data.String (fromString)
 
 data GracefulMode = ServeNormally | Serve503
 
 data WaiOptions = WaiOptions
   { port                     ∷ Int
+  , host                     ∷ String
   , socket                   ∷ String
   , protocol                 ∷ String
 #ifdef WaiCliTLS
@@ -43,6 +45,7 @@ data WaiOptions = WaiOptions
 instance Options WaiOptions where
   defineOptions = pure WaiOptions
     <*> simpleOption "port"              3000                "The port the app should listen for connections on (for http)"
+    <*> simpleOption "host"              "*4"                "Host preference (for http)"
     <*> simpleOption "socket"            "wai.sock"          "The UNIX domain socket path the app should listen for connections on (for unix)"
     <*> simpleOption "protocol"          "http"              ("The protocol for the server. One of: " ++ availableProtocols)
 #ifdef WaiCliTLS
@@ -104,7 +107,8 @@ waiMain putListening putWelcome app = runCommand $ \opts _ → do
 #ifdef WaiCliTLS
   let tlss = tlsSettings (tlsCertFile opts) (tlsKeyFile opts)
 #endif
-  let warps = setBeforeMainLoop (putListening opts) $ setPort (port opts) defaultSettings
+  let warps = setBeforeMainLoop (putListening opts) $ setPort (port opts) $
+              setHost (fromString $ host opts) defaultSettings
   let app' = if devlogging opts == Just True then logStdoutDev app else app
   case protocol opts of
      "cgi" → CGI.run app'
@@ -133,7 +137,8 @@ defPutListening ∷ WaiOptions → IO ()
 defPutListening opts = getNumCapabilities >>= putMain
   where putMain cpus = reset "Running on " >> blue (protocol opts) >> putProto >> reset " with " >> green (show cpus ++ " CPUs") >> setReset >> putStrLn ""
         putProto = case protocol opts of
-                     "http" → reset " port "   >> boldMagenta (show $ port opts)
+                     "http" → reset " host " >> boldMagenta (host opts)
+                              >> reset ", port " >> boldMagenta (show $ port opts)
                      "unix" → reset " socket " >> boldMagenta (show $ socket opts)
                      "activate" → reset " activated socket"
 #ifdef WaiCliTLS

@@ -29,6 +29,10 @@ flag tls
     description: Include warp-tls
     default: True
 
+flag fastcgi
+    description: Include wai-handler-fastcgi
+    default: False
+
 library
     build-depends:
         base >= 4.8.0.0 && < 5
@@ -52,3 +56,6 @@ library
     if flag(tls)
         build-depends: warp-tls
         cpp-options: -DWaiCliTLS
+    if flag(fastcgi)
+        build-depends: wai-handler-fastcgi
+        cpp-options: -DWaiCliFastCGI

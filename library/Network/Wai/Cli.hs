@@ -18,7 +18,7 @@ import qualified Network.Socket as S
 import           GHC.Conc (getNumCapabilities, forkIO)
 import           System.Posix.Internals (setNonBlockingFD)
 import           System.Posix.Signals (installHandler, sigTERM, Handler(CatchOnce))
-import           Data.Streaming.Network (bindPath)
+import           Data.Streaming.Network (bindPath, bindPortTCP)
 import           System.Console.ANSI
 import           Control.Concurrent.STM
 import           Control.Monad
@@ -27,6 +27,7 @@ import           Control.Exception (bracket)
 import           Options
 import           Data.List (intercalate)
 import           Data.String (fromString)
+import           Data.IP (fromHostAddress, fromHostAddress6)
 
 data GracefulMode = ServeNormally | Serve503
 
@@ -102,6 +103,29 @@ runGraceful mode run warps app = do
     conns ← readTVar activeConnections
     when (conns /= 0) retry
 
+-- | Adjusts 'WaiOptions' with an address assigned to a newly created
+-- server socket, uses those to set a "before main loop" function in
+-- Warp 'Settings', which are then used to run an application.
+runWarp :: (WaiOptions -> IO ())
+        -- ^ A "before main loop" function
+        -> WaiOptions
+        -- ^ Original options
+        -> (Settings -> S.Socket -> Application -> IO ())
+        -- ^ A function such as 'runSettingsSocket'
+        -> Settings -> Application -> IO ()
+runWarp putListening opts runSocket set app = S.withSocketsDo $
+  bracket (bindPortTCP (getPort set) (getHost set)) S.close $ \s -> do
+  sa <- S.getSocketName s
+  S.setCloseOnExecIfNeeded $ S.fdSocket s
+  runSocket (setBeforeMainLoop (putListening $ updateOptions sa opts) set) s app
+  where
+    updateOptions :: S.SockAddr -> WaiOptions -> WaiOptions
+    updateOptions (S.SockAddrInet pn ha) opt =
+      opt { port = fromIntegral pn, host = show (fromHostAddress ha) }
+    updateOptions (S.SockAddrInet6 pn _flow ha _scope) opt =
+      opt { port = fromIntegral pn, host = show (fromHostAddress6 ha) }
+    updateOptions _ opt = opt
+
 waiMain ∷ (WaiOptions → IO ()) → (WaiOptions → IO ()) → Application → IO ()
 waiMain putListening putWelcome app = runCommand $ \opts _ → do
 #ifdef WaiCliTLS
@@ -117,11 +141,11 @@ waiMain putListening putWelcome app = runCommand $ \opts _ → do
 #endif
      _ → do
        let run = case protocol opts of
-             "http" → runSettings
+             "http" → runWarp putListening opts runSettingsSocket
              "unix" → \warps' app'' → bracket (bindPath $ socket opts) S.close (\sock → runSettingsSocket warps' sock app'')
              "activate" → runActivated runSettingsSocket
 #ifdef WaiCliTLS
-             "http+tls" → runTLS tlss
+             "http+tls" → runWarp putListening opts (runTLSSocket tlss)
              "unix+tls" → \warps' app'' → bracket (bindPath $ socket opts) S.close (\sock → runTLSSocket tlss warps' sock app'')
              "activate+tls" → runActivated (runTLSSocket tlss)
 #endif

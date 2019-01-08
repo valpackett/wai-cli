@@ -44,10 +44,11 @@ library
       , monads-tf
       , stm
       , unix
-      , network
+      , network >= 2.7
       , wai
       , wai-extra
       , ansi-terminal
+      , iproute
     default-language: Haskell2010
     exposed-modules:
         Network.Wai.Cli

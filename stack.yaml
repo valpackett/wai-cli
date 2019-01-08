@@ -2,4 +2,4 @@ packages:
   - '.'
 extra-deps:
   - socket-activation-0.1.0.2
-resolver: lts-7.16
+resolver: lts-13.2

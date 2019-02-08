@@ -32,16 +32,16 @@ import           Data.IP (fromHostAddress, fromHostAddress6)
 data GracefulMode = ServeNormally | Serve503
 
 data WaiOptions = WaiOptions
-  { port                     ∷ Int
-  , host                     ∷ String
-  , socket                   ∷ String
-  , protocol                 ∷ String
+  { wHttpPort                ∷ Int
+  , wHttpHost                ∷ String
+  , wUnixSock                ∷ String
+  , wProtocol                ∷ String
 #ifdef WaiCliTLS
-  , tlsKeyFile               ∷ String
-  , tlsCertFile              ∷ String
+  , wTlsKeyFile              ∷ String
+  , wTlsCertFile             ∷ String
 #endif
-  , gracefulMode             ∷ String
-  , devlogging               ∷ Maybe Bool }
+  , wGracefulMode            ∷ String
+  , wDevlogging              ∷ Maybe Bool }
 
 instance Options WaiOptions where
   defineOptions = pure WaiOptions
@@ -121,37 +121,37 @@ runWarp putListening opts runSocket set app = S.withSocketsDo $
   where
     updateOptions :: S.SockAddr -> WaiOptions -> WaiOptions
     updateOptions (S.SockAddrInet pn ha) opt =
-      opt { port = fromIntegral pn, host = show (fromHostAddress ha) }
+      opt { wHttpPort = fromIntegral pn, wHttpHost = show (fromHostAddress ha) }
     updateOptions (S.SockAddrInet6 pn _flow ha _scope) opt =
-      opt { port = fromIntegral pn, host = show (fromHostAddress6 ha) }
+      opt { wHttpPort = fromIntegral pn, wHttpHost = show (fromHostAddress6 ha) }
     updateOptions _ opt = opt
 
 waiMain ∷ (WaiOptions → IO ()) → (WaiOptions → IO ()) → Application → IO ()
 waiMain putListening putWelcome app = runCommand $ \opts _ → do
 #ifdef WaiCliTLS
-  let tlss = tlsSettings (tlsCertFile opts) (tlsKeyFile opts)
+  let tlss = tlsSettings (wTlsCertFile opts) (wTlsKeyFile opts)
 #endif
-  let warps = setBeforeMainLoop (putListening opts) $ setPort (port opts) $
-              setHost (fromString $ host opts) defaultSettings
-  let app' = if devlogging opts == Just True then logStdoutDev app else app
-  case protocol opts of
+  let warps = setBeforeMainLoop (putListening opts) $ setPort (wHttpPort opts) $
+              setHost (fromString $ wHttpHost opts) defaultSettings
+  let app' = if wDevlogging opts == Just True then logStdoutDev app else app
+  case wProtocol opts of
      "cgi" → CGI.run app'
 #ifdef WaiCliFastCGI
      "fastcgi" → FCGI.run app'
 #endif
      _ → do
-       let run = case protocol opts of
+       let run = case wProtocol opts of
              "http" → runWarp putListening opts runSettingsSocket
-             "unix" → \warps' app'' → bracket (bindPath $ socket opts) S.close (\sock → runSettingsSocket warps' sock app'')
+             "unix" → \warps' app'' → bracket (bindPath $ wUnixSock opts) S.close (\sock → runSettingsSocket warps' sock app'')
              "activate" → runActivated runSettingsSocket
 #ifdef WaiCliTLS
              "http+tls" → runWarp putListening opts (runTLSSocket tlss)
-             "unix+tls" → \warps' app'' → bracket (bindPath $ socket opts) S.close (\sock → runTLSSocket tlss warps' sock app'')
+             "unix+tls" → \warps' app'' → bracket (bindPath $ wUnixSock opts) S.close (\sock → runTLSSocket tlss warps' sock app'')
              "activate+tls" → runActivated (runTLSSocket tlss)
 #endif
              x → \_ _ → putStrLn $ "Unsupported protocol: " ++ x
        putWelcome opts
-       case gracefulMode opts of
+       case wGracefulMode opts of
              "none" → run warps app'
              "serve-normally" → runGraceful ServeNormally run warps app'
              "serve-503" → runGraceful Serve503 run warps app'
@@ -159,15 +159,15 @@ waiMain putListening putWelcome app = runCommand $ \opts _ → do
 
 defPutListening ∷ WaiOptions → IO ()
 defPutListening opts = getNumCapabilities >>= putMain
-  where putMain cpus = reset "Running on " >> blue (protocol opts) >> putProto >> reset " with " >> green (show cpus ++ " CPUs") >> setReset >> putStrLn ""
-        putProto = case protocol opts of
-                     "http" → reset " host " >> boldMagenta (host opts)
-                              >> reset ", port " >> boldMagenta (show $ port opts)
-                     "unix" → reset " socket " >> boldMagenta (show $ socket opts)
+  where putMain cpus = reset "Running on " >> blue (wProtocol opts) >> putProto >> reset " with " >> green (show cpus ++ " CPUs") >> setReset >> putStrLn ""
+        putProto = case wProtocol opts of
+                     "http" → reset " host " >> boldMagenta (wHttpHost opts)
+                              >> reset ", port " >> boldMagenta (show $ wHttpPort opts)
+                     "unix" → reset " socket " >> boldMagenta (show $ wUnixSock opts)
                      "activate" → reset " activated socket"
 #ifdef WaiCliTLS
-                     "http+tls" → reset " (TLS) port "   >> boldMagenta (show $ port opts)
-                     "unix+tls" → reset " (TLS) socket " >> boldMagenta (show $ socket opts)
+                     "http+tls" → reset " (TLS) port "   >> boldMagenta (show $ wHttpPort opts)
+                     "unix+tls" → reset " (TLS) socket " >> boldMagenta (show $ wUnixSock opts)
                      "activate+tls" → reset " (TLS) activated socket"
 #endif
                      _      → setReset

@@ -9,7 +9,7 @@ description:
 category:        Web
 homepage:        https://github.com/myfreeweb/wai-cli
 author:          Greg V
-copyright:       2017 Greg V <greg@unrelenting.technology>
+copyright:       2017-2019 Greg V <greg@unrelenting.technology>
 maintainer:      greg@unrelenting.technology
 license:         PublicDomain
 license-file:    UNLICENSE
@@ -18,8 +18,7 @@ cabal-version:   >= 1.10
 extra-source-files:
     README.md
 tested-with:
-    GHC == 8.0.2
-    GHC == 7.10.3
+    GHC == 8.6.3
 
 source-repository head
     type: git

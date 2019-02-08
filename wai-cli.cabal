@@ -32,22 +32,25 @@ flag fastcgi
     description: Include wai-handler-fastcgi
     default: False
 
+flag unixsockets
+    description: Enable Unix sockets
+    default: True
+
 library
     build-depends:
         base >= 4.8.0.0 && < 5
       , options
       , warp
-      , socket-activation
       , streaming-commons
       , http-types
       , monads-tf
       , stm
-      , unix
       , network >= 2.7
       , wai
       , wai-extra
       , ansi-terminal
       , iproute
+      , signal
     default-language: Haskell2010
     exposed-modules:
         Network.Wai.Cli
@@ -59,3 +62,9 @@ library
     if flag(fastcgi)
         build-depends: wai-handler-fastcgi
         cpp-options: -DWaiCliFastCGI
+    if !os(windows) && flag(unixsockets)
+        cpp-options: -DUnixSockets
+        build-depends:
+            unix
+            , socket-activation
+

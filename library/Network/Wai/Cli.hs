@@ -13,19 +13,23 @@ import qualified Network.Wai.Handler.FastCGI as FCGI
 #endif
 import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
 import           Network.HTTP.Types (serviceUnavailable503)
+#ifdef UnixSockets
 import           Network.Socket.Activation
+import           System.Posix.Internals (setNonBlockingFD)
+import           Data.Streaming.Network (bindPath, bindPortTCP)
+#else
+import           Data.Streaming.Network (bindPortTCP)
+#endif
+import           System.Signal (installHandler, sigTERM)
 import qualified Network.Socket as S
 import           GHC.Conc (getNumCapabilities, forkIO)
-import           System.Posix.Internals (setNonBlockingFD)
-import           System.Posix.Signals (installHandler, sigTERM, Handler(CatchOnce))
-import           Data.Streaming.Network (bindPath, bindPortTCP)
 import           System.Console.ANSI
 import           Control.Concurrent.STM
 import           Control.Monad
 import           Control.Monad.Trans (liftIO)
 import           Control.Exception (bracket)
 import           Options
-import           Data.List (intercalate)
+import           Data.List (intercalate,(\\))
 import           Data.String (fromString)
 import           Data.IP (fromHostAddress, fromHostAddress6)
 
@@ -34,7 +38,9 @@ data GracefulMode = ServeNormally | Serve503
 data WaiOptions = WaiOptions
   { wHttpPort                ∷ Int
   , wHttpHost                ∷ String
+#ifdef UnixSockets
   , wUnixSock                ∷ String
+#endif
   , wProtocol                ∷ String
 #ifdef WaiCliTLS
   , wTlsKeyFile              ∷ String
@@ -47,7 +53,9 @@ instance Options WaiOptions where
   defineOptions = pure WaiOptions
     <*> simpleOption "port"              3000                "The port the app should listen for connections on (for http)"
     <*> simpleOption "host"              "*4"                "Host preference (for http)"
+#ifdef UnixSockets
     <*> simpleOption "socket"            "wai.sock"          "The UNIX domain socket path the app should listen for connections on (for unix)"
+#endif
     <*> simpleOption "protocol"          "http"              ("The protocol for the server. One of: " ++ availableProtocols)
 #ifdef WaiCliTLS
     <*> simpleOption "tlskey"            ""                  "Path to the TLS private key file for +tls protocols"
@@ -56,23 +64,22 @@ instance Options WaiOptions where
     <*> simpleOption "graceful"          "serve-normally"    "Graceful shutdown mode. One of: none, serve-normally, serve-503"
     <*> simpleOption "devlogging"        Nothing             "Whether development logging should be enabled"
     where
-      availableProtocols = intercalate ", " $ concat
-        [coreProtocols, tlsProtocols, fcgiProtocol]
-      coreProtocols = ["http", "unix", "activate", "cgi"]
-      tlsProtocols =
-#ifdef WaiCliTLS
-        ["http+tls", "unix+tls", "activate+tls"]
-#else
-        []
+      availableProtocols = intercalate ", " $ (allProtocols \\ exclusions)
+      allProtocols = ["http", "unix", "activate", "cgi" ,"http+tls", "unix+tls", "activate+tls" ,"fastcgi"]
+      exclusions = [
+#ifndef WaiCliTLS
+          "http+tls","unix+tls","activate+tls",
 #endif
-      fcgiProtocol =
-#ifdef WaiCliFastCGI
-        ["fastcgi"]
-#else
-        []
+#ifndef UnixSockets
+          "unix","unix+tls","activate", "activate+tls",
 #endif
+#ifndef WaiCliFastCGI
+          "fastcgi"
+#endif
+          ]
 
 
+#ifdef UnixSockets
 runActivated ∷ (Settings → S.Socket → Application → IO ()) → Settings → Application → IO ()
 runActivated run warps app = do
   sockets ← getActivatedSockets
@@ -82,6 +89,7 @@ runActivated run warps app = do
         setNonBlockingFD (S.fdSocket sock) True
         forkIO $ run warps sock app
     Nothing → putStrLn "No sockets to activate"
+#endif
 
 runGraceful ∷ GracefulMode → (Settings → Application → IO ()) → Settings → Application → IO ()
 runGraceful mode run warps app = do
@@ -89,7 +97,7 @@ runGraceful mode run warps app = do
   -- XXX: an option to stop accepting (need change stuff inside Warp?)
   shutdown ← newEmptyTMVarIO
   activeConnections ← newTVarIO (0 ∷ Int)
-  _ ← installHandler sigTERM (CatchOnce $ atomically $ putTMVar shutdown ()) Nothing
+  _ ← installHandler sigTERM (\_ → void . atomically $ tryPutTMVar shutdown ())
   let warps' = setOnOpen  (\_ → atomically (modifyTVar' activeConnections (+1)) >> return True) $
                setOnClose (\_ → atomically (modifyTVar' activeConnections (subtract 1)) >> return ()) warps
   let app' = case mode of
@@ -142,12 +150,16 @@ waiMain putListening putWelcome app = runCommand $ \opts _ → do
      _ → do
        let run = case wProtocol opts of
              "http" → runWarp putListening opts runSettingsSocket
+#ifdef UnixSockets
              "unix" → \warps' app'' → bracket (bindPath $ wUnixSock opts) S.close (\sock → runSettingsSocket warps' sock app'')
              "activate" → runActivated runSettingsSocket
+#endif
 #ifdef WaiCliTLS
              "http+tls" → runWarp putListening opts (runTLSSocket tlss)
+#ifdef UnixSockets
              "unix+tls" → \warps' app'' → bracket (bindPath $ wUnixSock opts) S.close (\sock → runTLSSocket tlss warps' sock app'')
              "activate+tls" → runActivated (runTLSSocket tlss)
+#endif
 #endif
              x → \_ _ → putStrLn $ "Unsupported protocol: " ++ x
        putWelcome opts
@@ -163,12 +175,16 @@ defPutListening opts = getNumCapabilities >>= putMain
         putProto = case wProtocol opts of
                      "http" → reset " host " >> boldMagenta (wHttpHost opts)
                               >> reset ", port " >> boldMagenta (show $ wHttpPort opts)
+#ifdef UnixSockets
                      "unix" → reset " socket " >> boldMagenta (show $ wUnixSock opts)
                      "activate" → reset " activated socket"
+#endif
 #ifdef WaiCliTLS
                      "http+tls" → reset " (TLS) port "   >> boldMagenta (show $ wHttpPort opts)
+#ifdef UnixSockets
                      "unix+tls" → reset " (TLS) socket " >> boldMagenta (show $ wUnixSock opts)
                      "activate+tls" → reset " (TLS) activated socket"
+#endif
 #endif
                      _      → setReset
         setReset = setSGR [ Reset ]

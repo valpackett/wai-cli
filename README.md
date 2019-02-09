@@ -5,6 +5,7 @@ A command line runner for Wai apps (using Warp) with support for:
 - `--protocol http --port 8000` TCP sockets
 - `--protocol unix --socket /var/run/app/sock` UNIX domain sockets
 - `--protocol cgi` running as a CGI app (the original serverless lambda functions from the 90s)
+- `--protocol fastcgi` running as a FastCGI app (OPTIONAL! You need to build with the `fastcgi` cabal flag and you need to have `libfcgi` (e.g. `fcgi-devkit` package on FreeBSD) installed)
 - `--protocol activate` socket activation (systemd-compatible, but not restricted to systemd in any way. see [soad](https://github.com/myfreeweb/soad) for an interesting use of (de)activation!)
 - `--protocol (http+tls|unix+tls|activate+tls) --tlskey key.pem --tlscert cert.pem` TLS (can be turned off with a cabal flag to avoid compiling [the TLS library](https://github.com/vincenthz/hs-tls))
 - `--graceful (none|serve-normally|serve-503)` graceful shutdown (on TERM signal)

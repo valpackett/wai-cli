@@ -14,9 +14,9 @@ addons:
 
 matrix:
   include:
-  - env: STK=lts-13.6
-  - env: STK=lts-12.26
-  - env: STK=lts-11.22
+  - env: STK=lts-13.6  YML=stack.yaml
+  - env: STK=lts-12.26 YML=stack-old.yaml
+  - env: STK=lts-11.22 YML=stack-old.yaml
 
 before_install:
 - mkdir -p ~/.local/bin
@@ -24,7 +24,7 @@ before_install:
 - travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
 install:
-- stack --no-terminal --resolver "$STK" --install-ghc test --only-dependencies
+- stack --no-terminal --resolver "$STK" --stack-yaml "$YML" --install-ghc test --only-dependencies
 
 script:
-- stack --no-terminal --resolver "$STK" test --haddock --no-haddock-deps
+- stack --no-terminal --resolver "$STK" --stack-yaml "$YML" test --haddock --no-haddock-deps

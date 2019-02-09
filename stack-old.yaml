@@ -1,0 +1,7 @@
+packages:
+  - '.'
+resolver: lts-13.6
+extra-deps:
+  - network-2.8.0.0
+# keep this for travis testing on older resolvers
+allow-newer: true

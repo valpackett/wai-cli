@@ -1,8 +1,3 @@
 packages:
   - '.'
-extra-deps:
-  - socket-activation-0.1.0.2
 resolver: lts-13.6
-
-# keep this for travis testing on older resolvers
-allow-newer: true

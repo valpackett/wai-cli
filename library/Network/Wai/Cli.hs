@@ -81,7 +81,6 @@ instance Options WaiOptions where
 #if defined(WaiCliTLS) && defined(WaiCliUnix)
         , "unix+tls", "activate+tls"
 #endif
-        -- also fastcgi and whatever
         , "fastcgi"
         ]
 

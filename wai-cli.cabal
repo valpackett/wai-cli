@@ -50,7 +50,6 @@ library
       , wai-extra
       , ansi-terminal
       , iproute
-      , signal
     default-language: Haskell2010
     exposed-modules:
         Network.Wai.Cli
@@ -63,7 +62,7 @@ library
         build-depends: wai-handler-fastcgi
         cpp-options: -DWaiCliFastCGI
     if !os(windows) && flag(unixsockets)
-        cpp-options: -DUnixSockets
+        cpp-options: -DWaiCliUnix
         build-depends:
             unix
             , socket-activation

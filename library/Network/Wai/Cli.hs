@@ -2,7 +2,6 @@
 
 module Network.Wai.Cli where
 
-import           Network.Wai (responseLBS, Application)
 import qualified Network.Wai.Handler.CGI as CGI
 import           Network.Wai.Handler.Warp hiding (run)
 #ifdef WaiCliTLS
@@ -12,24 +11,27 @@ import           Network.Wai.Handler.WarpTLS
 import qualified Network.Wai.Handler.FastCGI as FCGI
 #endif
 import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
+#ifdef WaiCliUnix
+import           Network.Wai (responseLBS, Application)
 import           Network.HTTP.Types (serviceUnavailable503)
-#ifdef UnixSockets
 import           Network.Socket.Activation
 import           System.Posix.Internals (setNonBlockingFD)
+import           System.Posix.Signals (installHandler, sigTERM, Handler(CatchOnce))
 import           Data.Streaming.Network (bindPath, bindPortTCP)
-#else
-import           Data.Streaming.Network (bindPortTCP)
-#endif
-import           System.Signal (installHandler, sigTERM)
-import qualified Network.Socket as S
-import           GHC.Conc (getNumCapabilities, forkIO)
-import           System.Console.ANSI
-import           Control.Concurrent.STM
 import           Control.Monad
 import           Control.Monad.Trans (liftIO)
+import           Control.Concurrent.STM
+import           GHC.Conc (getNumCapabilities, forkIO)
+#else
+import           Network.Wai (Application)
+import           Data.Streaming.Network (bindPortTCP)
+import           GHC.Conc (getNumCapabilities)
+#endif
+import qualified Network.Socket as S
+import           System.Console.ANSI
 import           Control.Exception (bracket)
 import           Options
-import           Data.List (intercalate,(\\))
+import           Data.List (intercalate)
 import           Data.String (fromString)
 import           Data.IP (fromHostAddress, fromHostAddress6)
 
@@ -38,7 +40,7 @@ data GracefulMode = ServeNormally | Serve503
 data WaiOptions = WaiOptions
   { wHttpPort                ∷ Int
   , wHttpHost                ∷ String
-#ifdef UnixSockets
+#ifdef WaiCliUnix
   , wUnixSock                ∷ String
 #endif
   , wProtocol                ∷ String
@@ -46,14 +48,16 @@ data WaiOptions = WaiOptions
   , wTlsKeyFile              ∷ String
   , wTlsCertFile             ∷ String
 #endif
+#ifdef WaiCliUnix
   , wGracefulMode            ∷ String
+#endif
   , wDevlogging              ∷ Maybe Bool }
 
 instance Options WaiOptions where
   defineOptions = pure WaiOptions
     <*> simpleOption "port"              3000                "The port the app should listen for connections on (for http)"
     <*> simpleOption "host"              "*4"                "Host preference (for http)"
-#ifdef UnixSockets
+#ifdef WaiCliUnix
     <*> simpleOption "socket"            "wai.sock"          "The UNIX domain socket path the app should listen for connections on (for unix)"
 #endif
     <*> simpleOption "protocol"          "http"              ("The protocol for the server. One of: " ++ availableProtocols)
@@ -61,25 +65,28 @@ instance Options WaiOptions where
     <*> simpleOption "tlskey"            ""                  "Path to the TLS private key file for +tls protocols"
     <*> simpleOption "tlscert"           ""                  "Path to the TLS certificate bundle file for +tls protocols"
 #endif
+#ifdef WaiCliUnix
     <*> simpleOption "graceful"          "serve-normally"    "Graceful shutdown mode. One of: none, serve-normally, serve-503"
+#endif
     <*> simpleOption "devlogging"        Nothing             "Whether development logging should be enabled"
     where
-      availableProtocols = intercalate ", " $ (allProtocols \\ exclusions)
-      allProtocols = ["http", "unix", "activate", "cgi" ,"http+tls", "unix+tls", "activate+tls" ,"fastcgi"]
-      exclusions = [
-#ifndef WaiCliTLS
-          "http+tls","unix+tls","activate+tls",
+      availableProtocols = intercalate ", " [
+          "http", "cgi"
+#ifdef WaiCliUnix
+        , "unix", "activate"
 #endif
-#ifndef UnixSockets
-          "unix","unix+tls","activate", "activate+tls",
+#ifdef WaiCliTLS
+        , "http+tls"
 #endif
-#ifndef WaiCliFastCGI
-          "fastcgi"
+#if defined(WaiCliTLS) && defined(WaiCliUnix)
+        , "unix+tls", "activate+tls"
 #endif
-          ]
+        -- also fastcgi and whatever
+        , "fastcgi"
+        ]
 
 
-#ifdef UnixSockets
+#ifdef WaiCliUnix
 runActivated ∷ (Settings → S.Socket → Application → IO ()) → Settings → Application → IO ()
 runActivated run warps app = do
   sockets ← getActivatedSockets
@@ -89,7 +96,7 @@ runActivated run warps app = do
         setNonBlockingFD (S.fdSocket sock) True
         forkIO $ run warps sock app
     Nothing → putStrLn "No sockets to activate"
-#endif
+
 
 runGraceful ∷ GracefulMode → (Settings → Application → IO ()) → Settings → Application → IO ()
 runGraceful mode run warps app = do
@@ -97,7 +104,7 @@ runGraceful mode run warps app = do
   -- XXX: an option to stop accepting (need change stuff inside Warp?)
   shutdown ← newEmptyTMVarIO
   activeConnections ← newTVarIO (0 ∷ Int)
-  _ ← installHandler sigTERM (\_ → void . atomically $ tryPutTMVar shutdown ())
+  _ ← installHandler sigTERM (CatchOnce $ atomically $ putTMVar shutdown ()) Nothing
   let warps' = setOnOpen  (\_ → atomically (modifyTVar' activeConnections (+1)) >> return True) $
                setOnClose (\_ → atomically (modifyTVar' activeConnections (subtract 1)) >> return ()) warps
   let app' = case mode of
@@ -110,6 +117,7 @@ runGraceful mode run warps app = do
     takeTMVar shutdown
     conns ← readTVar activeConnections
     when (conns /= 0) retry
+#endif
 
 -- | Adjusts 'WaiOptions' with an address assigned to a newly created
 -- server socket, uses those to set a "before main loop" function in
@@ -150,24 +158,28 @@ waiMain putListening putWelcome app = runCommand $ \opts _ → do
      _ → do
        let run = case wProtocol opts of
              "http" → runWarp putListening opts runSettingsSocket
-#ifdef UnixSockets
+#ifdef WaiCliUnix
              "unix" → \warps' app'' → bracket (bindPath $ wUnixSock opts) S.close (\sock → runSettingsSocket warps' sock app'')
              "activate" → runActivated runSettingsSocket
 #endif
 #ifdef WaiCliTLS
              "http+tls" → runWarp putListening opts (runTLSSocket tlss)
-#ifdef UnixSockets
+#ifdef WaiCliUnix
              "unix+tls" → \warps' app'' → bracket (bindPath $ wUnixSock opts) S.close (\sock → runTLSSocket tlss warps' sock app'')
              "activate+tls" → runActivated (runTLSSocket tlss)
 #endif
 #endif
              x → \_ _ → putStrLn $ "Unsupported protocol: " ++ x
        putWelcome opts
+#ifdef WaiCliUnix
        case wGracefulMode opts of
              "none" → run warps app'
              "serve-normally" → runGraceful ServeNormally run warps app'
              "serve-503" → runGraceful Serve503 run warps app'
              x  → putStrLn $ "Unsupported graceful mode: " ++ x
+#else
+       run warps app'
+#endif
 
 defPutListening ∷ WaiOptions → IO ()
 defPutListening opts = getNumCapabilities >>= putMain
@@ -175,13 +187,13 @@ defPutListening opts = getNumCapabilities >>= putMain
         putProto = case wProtocol opts of
                      "http" → reset " host " >> boldMagenta (wHttpHost opts)
                               >> reset ", port " >> boldMagenta (show $ wHttpPort opts)
-#ifdef UnixSockets
+#ifdef WaiCliUnix
                      "unix" → reset " socket " >> boldMagenta (show $ wUnixSock opts)
                      "activate" → reset " activated socket"
 #endif
 #ifdef WaiCliTLS
                      "http+tls" → reset " (TLS) port "   >> boldMagenta (show $ wHttpPort opts)
-#ifdef UnixSockets
+#ifdef WaiCliUnix
                      "unix+tls" → reset " (TLS) socket " >> boldMagenta (show $ wUnixSock opts)
                      "activate+tls" → reset " (TLS) activated socket"
 #endif

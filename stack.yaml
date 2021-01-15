@@ -1,5 +1,4 @@
 packages:
   - '.'
-extra-deps:
-  - wai-handler-fastcgi-3.0.0.2
-resolver: lts-13.6
+extra-deps: []
+resolver: lts-16.12

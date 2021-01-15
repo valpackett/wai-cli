@@ -14,11 +14,15 @@ import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
 #ifdef WaiCliUnix
 import           Network.Wai (responseLBS, Application)
 import           Network.HTTP.Types (serviceUnavailable503)
-import           Network.Socket.Activation
+import           System.Posix.Env
+import           System.Posix.Process
+import           Foreign.C.Types(CInt(..))
 import           System.Posix.Internals (setNonBlockingFD)
 import           System.Posix.Signals (installHandler, sigTERM, Handler(CatchOnce))
 import           Data.Streaming.Network (bindPath, bindPortTCP)
 import           Control.Monad
+import           Control.Monad.Trans.Maybe
+import           Control.Monad.Trans.Class
 import           Control.Monad.Trans (liftIO)
 import           Control.Concurrent.STM
 import           GHC.Conc (getNumCapabilities, forkIO)
@@ -88,13 +92,29 @@ instance Options WaiOptions where
 
 
 #ifdef WaiCliUnix
+
+fdStart :: CInt
+fdStart = 3
+
+getActivatedSockets :: IO (Maybe [S.Socket])
+getActivatedSockets = runMaybeT $ do
+    listenPid <- read <$> MaybeT (getEnv "LISTEN_PID")
+    listenFDs <- read <$> MaybeT (getEnv "LISTEN_FDS")
+    myPid     <- lift getProcessID
+    guard $ listenPid == myPid
+    mapM makeSocket [fdStart .. fdStart + listenFDs - 1]
+  where
+    makeSocket fd = do
+      lift $ S.mkSocket fd
+
 runActivated ∷ (Settings → S.Socket → Application → IO ()) → Settings → Application → IO ()
 runActivated run warps app = do
   sockets ← getActivatedSockets
   case sockets of
     Just socks →
       void $ forM socks $ \sock → do
-        setNonBlockingFD (S.fdSocket sock) True
+        S.withFdSocket sock $ \sfd ->
+          setNonBlockingFD sfd True
         forkIO $ run warps sock app
     Nothing → putStrLn "No sockets to activate"
 
@@ -133,7 +153,7 @@ runWarp :: (WaiOptions -> IO ())
 runWarp putListening opts runSocket set app = S.withSocketsDo $
   bracket (bindPortTCP (getPort set) (getHost set)) S.close $ \s -> do
   sa <- S.getSocketName s
-  S.setCloseOnExecIfNeeded $ S.fdSocket s
+  S.withFdSocket s $ S.setCloseOnExecIfNeeded
   runSocket (setBeforeMainLoop (putListening $ updateOptions sa opts) set) s app
   where
     updateOptions :: S.SockAddr -> WaiOptions -> WaiOptions

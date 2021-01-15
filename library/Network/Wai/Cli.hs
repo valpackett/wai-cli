@@ -93,19 +93,16 @@ instance Options WaiOptions where
 
 #ifdef WaiCliUnix
 
-fdStart :: CInt
+fdStart ∷ CInt
 fdStart = 3
 
-getActivatedSockets :: IO (Maybe [S.Socket])
+getActivatedSockets ∷ IO (Maybe [S.Socket])
 getActivatedSockets = runMaybeT $ do
-    listenPid <- read <$> MaybeT (getEnv "LISTEN_PID")
-    listenFDs <- read <$> MaybeT (getEnv "LISTEN_FDS")
-    myPid     <- lift getProcessID
+    listenPid ← read <$> MaybeT (getEnv "LISTEN_PID")
+    listenFDs ← read <$> MaybeT (getEnv "LISTEN_FDS")
+    myPid     ← lift getProcessID
     guard $ listenPid == myPid
-    mapM makeSocket [fdStart .. fdStart + listenFDs - 1]
-  where
-    makeSocket fd = do
-      lift $ S.mkSocket fd
+    mapM (lift . S.mkSocket) [fdStart .. fdStart + listenFDs - 1]
 
 runActivated ∷ (Settings → S.Socket → Application → IO ()) → Settings → Application → IO ()
 runActivated run warps app = do
@@ -113,7 +110,7 @@ runActivated run warps app = do
   case sockets of
     Just socks →
       void $ forM socks $ \sock → do
-        S.withFdSocket sock $ \sfd ->
+        S.withFdSocket sock $ \sfd →
           setNonBlockingFD sfd True
         forkIO $ run warps sock app
     Nothing → putStrLn "No sockets to activate"
@@ -143,20 +140,20 @@ runGraceful mode run warps app = do
 -- | Adjusts 'WaiOptions' with an address assigned to a newly created
 -- server socket, uses those to set a "before main loop" function in
 -- Warp 'Settings', which are then used to run an application.
-runWarp :: (WaiOptions -> IO ())
+runWarp ∷ (WaiOptions → IO ())
         -- ^ A "before main loop" function
-        -> WaiOptions
+        → WaiOptions
         -- ^ Original options
-        -> (Settings -> S.Socket -> Application -> IO ())
+        → (Settings → S.Socket → Application → IO ())
         -- ^ A function such as 'runSettingsSocket'
-        -> Settings -> Application -> IO ()
+        → Settings → Application → IO ()
 runWarp putListening opts runSocket set app = S.withSocketsDo $
-  bracket (bindPortTCP (getPort set) (getHost set)) S.close $ \s -> do
-  sa <- S.getSocketName s
-  S.withFdSocket s $ S.setCloseOnExecIfNeeded
+  bracket (bindPortTCP (getPort set) (getHost set)) S.close $ \s → do
+  sa ← S.getSocketName s
+  S.withFdSocket s S.setCloseOnExecIfNeeded
   runSocket (setBeforeMainLoop (putListening $ updateOptions sa opts) set) s app
   where
-    updateOptions :: S.SockAddr -> WaiOptions -> WaiOptions
+    updateOptions ∷ S.SockAddr → WaiOptions → WaiOptions
     updateOptions (S.SockAddrInet pn ha) opt =
       opt { wHttpPort = fromIntegral pn, wHttpHost = show (fromHostAddress ha) }
     updateOptions (S.SockAddrInet6 pn _flow ha _scope) opt =

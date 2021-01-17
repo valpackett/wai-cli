@@ -1,4 +1,4 @@
-# wai-cli [![Hackage](https://img.shields.io/hackage/v/wai-cli.svg?style=flat)](https://hackage.haskell.org/package/wai-cli) [![Build Status](https://img.shields.io/travis/myfreeweb/wai-cli.svg?style=flat)](https://travis-ci.org/myfreeweb/wai-cli) [![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](http://unlicense.org)
+# wai-cli [![Hackage](https://img.shields.io/hackage/v/wai-cli.svg?style=flat)](https://hackage.haskell.org/package/wai-cli) [![Build Status](https://github.com/myfreeweb/wai-cli/workflows/WaiCLI%20CI/badge.svg)](https://github.com/myfreeweb/wai-cli/actions?query=workflow%3A%22WaiCLI+CI%22) [![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](http://unlicense.org)
 
 A command line runner for Wai apps (using Warp) with support for:
 

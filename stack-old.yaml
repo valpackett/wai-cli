@@ -1,7 +1,0 @@
-packages:
-  - '.'
-resolver: lts-13.6
-extra-deps:
-  - network-2.8.0.0
-  - wai-handler-fastcgi-3.0.0.2
-allow-newer: true

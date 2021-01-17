@@ -14,7 +14,7 @@ addons:
 
 matrix:
   include:
-  - env: STK=lts-13.6  YML=stack.yaml
+  - env: STK=lts-16.12 YML=stack.yaml
   - env: STK=lts-12.26 YML=stack-old.yaml
   - env: STK=lts-11.22 YML=stack-old.yaml
 

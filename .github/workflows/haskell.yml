@@ -1,0 +1,39 @@
+name: WaiCLI CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  stack:
+    name: ghc ${{ matrix.ghc }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ghc: ["8.8.4","8.4.4","8.2.2"]
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-haskell@v1
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        stack-version: latest
+        enable-stack: true
+
+    - name: Cache
+      uses: actions/cache@v1
+      env:
+        cache-name: cache-cabal
+      with:
+        path: ~/.stack
+        key: ${{ runner.os }}-ci-${{ env.cache-name }}-${{ matrix.ghc }}
+
+    - name: Install & Build dependencies
+      run: |
+        stack build --system-ghc --only-dependencies
+    - name: Build
+      run: |
+        stack build --system-ghc --test --bench --no-run-tests --no-run-benchmarks
+  
